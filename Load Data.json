@@ -1,0 +1,230 @@
+{
+    "name": "Load Data",
+    "properties": {
+        "activities": [
+            {
+                "name": "Log the Load Data Start",
+                "type": "SqlServerStoredProcedure",
+                "dependsOn": [],
+                "policy": {
+                    "timeout": "7.00:00:00",
+                    "retry": 0,
+                    "retryIntervalInSeconds": 30,
+                    "secureOutput": false,
+                    "secureInput": false
+                },
+                "userProperties": [],
+                "typeProperties": {
+                    "storedProcedureName": "[dbo].[usp_Log_Pipeline_Events]",
+                    "storedProcedureParameters": {
+                        "EventType": {
+                            "value": "Load SystmOne CSVs from Process Folder",
+                            "type": "String"
+                        },
+                        "PipelineName": {
+                            "value": {
+                                "value": "@pipeline().Pipeline",
+                                "type": "Expression"
+                            },
+                            "type": "String"
+                        },
+                        "PipelineRunID": {
+                            "value": {
+                                "value": "@pipeline().RunId",
+                                "type": "Expression"
+                            },
+                            "type": "String"
+                        },
+                        "PipelineTriggerID": {
+                            "value": {
+                                "value": "@pipeline().TriggerId",
+                                "type": "Expression"
+                            },
+                            "type": "String"
+                        },
+                        "PipelineTriggeredByPipeline": {
+                            "value": {
+                                "value": "@pipeline()?.TriggeredByPipelineName",
+                                "type": "Expression"
+                            },
+                            "type": "String"
+                        },
+                        "ProcessPhase": {
+                            "value": "Load Files",
+                            "type": "String"
+                        },
+                        "EventText": {
+                            "value": null,
+                            "type": "String"
+                        },
+                        "DataFactoryName": {
+                            "value": {
+                                "value": "@pipeline().DataFactory",
+                                "type": "Expression"
+                            },
+                            "type": "String"
+                        }
+                    }
+                },
+                "linkedServiceName": {
+                    "referenceName": "AzSqlDb_SystmOne",
+                    "type": "LinkedServiceReference"
+                }
+            },
+            {
+                "name": "For Each Manifest FileName",
+                "type": "ForEach",
+                "dependsOn": [
+                    {
+                        "activity": "Find Filename From Manifest",
+                        "dependencyConditions": [
+                            "Succeeded"
+                        ]
+                    }
+                ],
+                "userProperties": [],
+                "typeProperties": {
+                    "items": {
+                        "value": "@activity('Find Filename From Manifest').output.value",
+                        "type": "Expression"
+                    },
+                    "isSequential": true,
+                    "activities": [
+                        {
+                            "name": "Load Multiple CSVs To SQL",
+                            "type": "ExecutePipeline",
+                            "dependsOn": [],
+                            "userProperties": [],
+                            "typeProperties": {
+                                "pipeline": {
+                                    "referenceName": "Load Each SystmOne CSV File To SQL",
+                                    "type": "PipelineReference"
+                                },
+                                "waitOnCompletion": false,
+                                "parameters": {
+                                    "FileName": {
+                                        "value": "@concat(Item().FileName,'.csv')",
+                                        "type": "Expression"
+                                    },
+                                    "TableName": {
+                                        "value": "@concat('wtbl',Item().FileName)",
+                                        "type": "Expression"
+                                    },
+                                    "FileProcessName": {
+                                        "value": "@concat(Item().FileName)",
+                                        "type": "Expression"
+                                    }
+                                }
+                            }
+                        }
+                    ]
+                }
+            },
+            {
+                "name": "Find Filename From Manifest",
+                "type": "Lookup",
+                "dependsOn": [
+                    {
+                        "activity": "Log the Load Data Start",
+                        "dependencyConditions": [
+                            "Succeeded"
+                        ]
+                    }
+                ],
+                "policy": {
+                    "timeout": "7.00:00:00",
+                    "retry": 0,
+                    "retryIntervalInSeconds": 30,
+                    "secureOutput": false,
+                    "secureInput": false
+                },
+                "userProperties": [],
+                "typeProperties": {
+                    "source": {
+                        "type": "SqlMISource",
+                        "sqlReaderQuery": "SELECT LTRIM(RTRIM([FileName])) AS FileName \nFROM dbo.tblSRManifest\nWHERE SYSIsLoaded = 0",
+                        "isolationLevel": "ReadCommitted",
+                        "partitionOption": "None"
+                    },
+                    "dataset": {
+                        "referenceName": "AzureSqlMITables",
+                        "type": "DatasetReference"
+                    },
+                    "firstRowOnly": false
+                }
+            },
+            {
+                "name": "Log the Load CSV Data Success",
+                "type": "SqlServerStoredProcedure",
+                "dependsOn": [
+                    {
+                        "activity": "For Each Manifest FileName",
+                        "dependencyConditions": [
+                            "Succeeded"
+                        ]
+                    }
+                ],
+                "policy": {
+                    "timeout": "7.00:00:00",
+                    "retry": 0,
+                    "retryIntervalInSeconds": 30,
+                    "secureOutput": false,
+                    "secureInput": false
+                },
+                "userProperties": [],
+                "typeProperties": {
+                    "storedProcedureName": "[dbo].[usp_Update_Pipeline_Events]",
+                    "storedProcedureParameters": {
+                        "EventText": {
+                            "value": "Load of SystmOne CSVs has Completed Successfully",
+                            "type": "String"
+                        }
+                    }
+                },
+                "linkedServiceName": {
+                    "referenceName": "AzSqlDb_SystmOne",
+                    "type": "LinkedServiceReference"
+                }
+            },
+            {
+                "name": "Log the Load CSV Data Failure",
+                "type": "SqlServerStoredProcedure",
+                "dependsOn": [
+                    {
+                        "activity": "For Each Manifest FileName",
+                        "dependencyConditions": [
+                            "Failed"
+                        ]
+                    }
+                ],
+                "policy": {
+                    "timeout": "7.00:00:00",
+                    "retry": 0,
+                    "retryIntervalInSeconds": 30,
+                    "secureOutput": false,
+                    "secureInput": false
+                },
+                "userProperties": [],
+                "typeProperties": {
+                    "storedProcedureName": "[dbo].[usp_Update_Pipeline_Events]",
+                    "storedProcedureParameters": {
+                        "EventText": {
+                            "value": "Load of CSV File Data has Failed",
+                            "type": "String"
+                        }
+                    }
+                },
+                "linkedServiceName": {
+                    "referenceName": "AzSqlDb_SystmOne",
+                    "type": "LinkedServiceReference"
+                }
+            }
+        ],
+        "folder": {
+            "name": "SystmOne Data Load"
+        },
+        "annotations": [],
+        "lastPublishTime": "2021-11-11T14:20:38Z"
+    },
+    "type": "Microsoft.DataFactory/factories/pipelines"
+}

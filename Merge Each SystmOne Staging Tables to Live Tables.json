@@ -1,0 +1,243 @@
+{
+    "name": "Merge Each SystmOne Staging Tables to Live Tables",
+    "properties": {
+        "activities": [
+            {
+                "name": "Does the Merge Procedure Exist",
+                "type": "IfCondition",
+                "dependsOn": [
+                    {
+                        "activity": "Find Merge Stored procedure",
+                        "dependencyConditions": [
+                            "Succeeded"
+                        ]
+                    }
+                ],
+                "userProperties": [],
+                "typeProperties": {
+                    "expression": {
+                        "value": "@activity('Find Merge Stored procedure').output.firstRow.ProcedureFound",
+                        "type": "Expression"
+                    },
+                    "ifTrueActivities": [
+                        {
+                            "name": "Execute Table Merge Stored Procedure",
+                            "type": "SqlServerStoredProcedure",
+                            "dependsOn": [
+                                {
+                                    "activity": "Log the Merge Data Start",
+                                    "dependencyConditions": [
+                                        "Succeeded"
+                                    ]
+                                }
+                            ],
+                            "policy": {
+                                "timeout": "7.00:00:00",
+                                "retry": 0,
+                                "retryIntervalInSeconds": 30,
+                                "secureOutput": false,
+                                "secureInput": false
+                            },
+                            "userProperties": [],
+                            "typeProperties": {
+                                "storedProcedureName": {
+                                    "value": "@concat(pipeline().parameters.ProcedureName)",
+                                    "type": "Expression"
+                                }
+                            },
+                            "linkedServiceName": {
+                                "referenceName": "AzSqlDb_SystmOne",
+                                "type": "LinkedServiceReference"
+                            }
+                        },
+                        {
+                            "name": "Update SRManifest",
+                            "type": "SqlServerStoredProcedure",
+                            "dependsOn": [
+                                {
+                                    "activity": "Execute Table Merge Stored Procedure",
+                                    "dependencyConditions": [
+                                        "Succeeded"
+                                    ]
+                                }
+                            ],
+                            "policy": {
+                                "timeout": "7.00:00:00",
+                                "retry": 0,
+                                "retryIntervalInSeconds": 30,
+                                "secureOutput": false,
+                                "secureInput": false
+                            },
+                            "userProperties": [],
+                            "typeProperties": {
+                                "storedProcedureName": "[dbo].[usp_UpdateSRManifest_FileMergeColumns]",
+                                "storedProcedureParameters": {
+                                    "FileName": {
+                                        "value": {
+                                            "value": "@pipeline().parameters.ProcessFileName",
+                                            "type": "Expression"
+                                        },
+                                        "type": "String"
+                                    }
+                                }
+                            },
+                            "linkedServiceName": {
+                                "referenceName": "AzSqlDb_SystmOne",
+                                "type": "LinkedServiceReference"
+                            }
+                        },
+                        {
+                            "name": "Log the Merge Process End",
+                            "type": "SqlServerStoredProcedure",
+                            "dependsOn": [
+                                {
+                                    "activity": "Update SRManifest",
+                                    "dependencyConditions": [
+                                        "Succeeded"
+                                    ]
+                                }
+                            ],
+                            "policy": {
+                                "timeout": "7.00:00:00",
+                                "retry": 0,
+                                "retryIntervalInSeconds": 30,
+                                "secureOutput": false,
+                                "secureInput": false
+                            },
+                            "userProperties": [],
+                            "typeProperties": {
+                                "storedProcedureName": "[dbo].[usp_Update_Import_Details_Merge_End]",
+                                "storedProcedureParameters": {
+                                    "FileName": {
+                                        "value": {
+                                            "value": "@pipeline().parameters.FileName",
+                                            "type": "Expression"
+                                        },
+                                        "type": "String"
+                                    }
+                                }
+                            },
+                            "linkedServiceName": {
+                                "referenceName": "AzSqlDb_SystmOne",
+                                "type": "LinkedServiceReference"
+                            }
+                        },
+                        {
+                            "name": "Log the Merge Data Start",
+                            "type": "SqlServerStoredProcedure",
+                            "dependsOn": [],
+                            "policy": {
+                                "timeout": "7.00:00:00",
+                                "retry": 0,
+                                "retryIntervalInSeconds": 30,
+                                "secureOutput": false,
+                                "secureInput": false
+                            },
+                            "userProperties": [],
+                            "typeProperties": {
+                                "storedProcedureName": "[dbo].[usp_Update_Import_Details_Merge_Start]",
+                                "storedProcedureParameters": {
+                                    "FileName": {
+                                        "value": {
+                                            "value": "@pipeline().parameters.FileName",
+                                            "type": "Expression"
+                                        },
+                                        "type": "String"
+                                    }
+                                }
+                            },
+                            "linkedServiceName": {
+                                "referenceName": "AzSqlDb_SystmOne",
+                                "type": "LinkedServiceReference"
+                            }
+                        },
+                        {
+                            "name": "Log the Merge Process Failure",
+                            "type": "SqlServerStoredProcedure",
+                            "dependsOn": [
+                                {
+                                    "activity": "Execute Table Merge Stored Procedure",
+                                    "dependencyConditions": [
+                                        "Failed"
+                                    ]
+                                }
+                            ],
+                            "policy": {
+                                "timeout": "7.00:00:00",
+                                "retry": 0,
+                                "retryIntervalInSeconds": 30,
+                                "secureOutput": false,
+                                "secureInput": false
+                            },
+                            "userProperties": [],
+                            "typeProperties": {
+                                "storedProcedureName": "[dbo].[usp_Update_Import_Details_Merge_Failure]",
+                                "storedProcedureParameters": {
+                                    "FileName": {
+                                        "value": {
+                                            "value": "@pipeline().parameters.FileName",
+                                            "type": "Expression"
+                                        },
+                                        "type": "String"
+                                    }
+                                }
+                            },
+                            "linkedServiceName": {
+                                "referenceName": "AzSqlDb_SystmOne",
+                                "type": "LinkedServiceReference"
+                            }
+                        }
+                    ]
+                }
+            },
+            {
+                "name": "Find Merge Stored procedure",
+                "type": "Lookup",
+                "dependsOn": [],
+                "policy": {
+                    "timeout": "7.00:00:00",
+                    "retry": 0,
+                    "retryIntervalInSeconds": 30,
+                    "secureOutput": false,
+                    "secureInput": false
+                },
+                "userProperties": [],
+                "typeProperties": {
+                    "source": {
+                        "type": "SqlMISource",
+                        "sqlReaderQuery": {
+                            "value": "@concat('SELECT CAST(COUNT(*) AS BIT) AS ProcedureFound FROM sys.objects WHERE [type] = ''P'' AND [name]=''',pipeline().parameters.ProcedureName,'''')",
+                            "type": "Expression"
+                        },
+                        "partitionOption": "None"
+                    },
+                    "dataset": {
+                        "referenceName": "AzSQLSysobjectsTable",
+                        "type": "DatasetReference"
+                    }
+                }
+            }
+        ],
+        "parameters": {
+            "FileName": {
+                "type": "string"
+            },
+            "TableName": {
+                "type": "string"
+            },
+            "ProcedureName": {
+                "type": "string",
+                "defaultValue": "usp_Load_tblSRMapping"
+            },
+            "ProcessFileName": {
+                "type": "string"
+            }
+        },
+        "folder": {
+            "name": "SystmOne Data Load"
+        },
+        "annotations": [],
+        "lastPublishTime": "2021-11-11T09:26:32Z"
+    },
+    "type": "Microsoft.DataFactory/factories/pipelines"
+}

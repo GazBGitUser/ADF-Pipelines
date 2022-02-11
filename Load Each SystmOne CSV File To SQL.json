@@ -1,0 +1,252 @@
+{
+    "name": "Load Each SystmOne CSV File To SQL",
+    "properties": {
+        "activities": [
+            {
+                "name": "Load CSV Files",
+                "type": "Copy",
+                "dependsOn": [
+                    {
+                        "activity": "Log the Load CSV Process Start",
+                        "dependencyConditions": [
+                            "Succeeded"
+                        ]
+                    }
+                ],
+                "policy": {
+                    "timeout": "7.00:00:00",
+                    "retry": 0,
+                    "retryIntervalInSeconds": 30,
+                    "secureOutput": false,
+                    "secureInput": false
+                },
+                "userProperties": [],
+                "typeProperties": {
+                    "source": {
+                        "type": "DelimitedTextSource",
+                        "storeSettings": {
+                            "type": "AzureFileStorageReadSettings",
+                            "recursive": true,
+                            "enablePartitionDiscovery": false
+                        },
+                        "formatSettings": {
+                            "type": "DelimitedTextReadSettings"
+                        }
+                    },
+                    "sink": {
+                        "type": "SqlMISink",
+                        "preCopyScript": {
+                            "value": "TRUNCATE TABLE @{pipeline().parameters.TableName}",
+                            "type": "Expression"
+                        }
+                    },
+                    "enableStaging": false,
+                    "translator": {
+                        "type": "TabularTranslator",
+                        "typeConversion": true,
+                        "typeConversionSettings": {
+                            "allowDataTruncation": true,
+                            "treatBooleanAsNumber": false
+                        }
+                    }
+                },
+                "inputs": [
+                    {
+                        "referenceName": "FilesFileNameCSV",
+                        "type": "DatasetReference",
+                        "parameters": {
+                            "FileName": "@pipeline().parameters.FileName"
+                        }
+                    }
+                ],
+                "outputs": [
+                    {
+                        "referenceName": "AzSQLTable",
+                        "type": "DatasetReference",
+                        "parameters": {
+                            "TableName": {
+                                "value": "@pipeline().parameters.TableName",
+                                "type": "Expression"
+                            }
+                        }
+                    }
+                ]
+            },
+            {
+                "name": "Update SRManifest",
+                "type": "SqlServerStoredProcedure",
+                "dependsOn": [
+                    {
+                        "activity": "Load CSV Files",
+                        "dependencyConditions": [
+                            "Succeeded"
+                        ]
+                    }
+                ],
+                "policy": {
+                    "timeout": "7.00:00:00",
+                    "retry": 0,
+                    "retryIntervalInSeconds": 30,
+                    "secureOutput": false,
+                    "secureInput": false
+                },
+                "userProperties": [],
+                "typeProperties": {
+                    "storedProcedureName": "[dbo].[usp_UpdateSRManifest_FileLoadColumns]",
+                    "storedProcedureParameters": {
+                        "FileName": {
+                            "value": {
+                                "value": "@pipeline().parameters.FileProcessName",
+                                "type": "Expression"
+                            },
+                            "type": "String"
+                        }
+                    }
+                },
+                "linkedServiceName": {
+                    "referenceName": "AzSqlDb_SystmOne",
+                    "type": "LinkedServiceReference"
+                }
+            },
+            {
+                "name": "Log the Load CSV Process Start",
+                "type": "SqlServerStoredProcedure",
+                "dependsOn": [],
+                "policy": {
+                    "timeout": "7.00:00:00",
+                    "retry": 0,
+                    "retryIntervalInSeconds": 30,
+                    "secureOutput": false,
+                    "secureInput": false
+                },
+                "userProperties": [],
+                "typeProperties": {
+                    "storedProcedureName": "[dbo].[usp_Log_Import_Details]",
+                    "storedProcedureParameters": {
+                        "FileName": {
+                            "value": {
+                                "value": "@pipeline().parameters.FileName",
+                                "type": "Expression"
+                            },
+                            "type": "String"
+                        },
+                        "TableName": {
+                            "value": {
+                                "value": "@pipeline().parameters.TableName",
+                                "type": "Expression"
+                            },
+                            "type": "String"
+                        }
+                    }
+                },
+                "linkedServiceName": {
+                    "referenceName": "AzSqlDb_SystmOne",
+                    "type": "LinkedServiceReference"
+                }
+            },
+            {
+                "name": "Log the Load CSV Data End",
+                "type": "SqlServerStoredProcedure",
+                "dependsOn": [
+                    {
+                        "activity": "Update SRManifest",
+                        "dependencyConditions": [
+                            "Succeeded"
+                        ]
+                    }
+                ],
+                "policy": {
+                    "timeout": "7.00:00:00",
+                    "retry": 0,
+                    "retryIntervalInSeconds": 30,
+                    "secureOutput": false,
+                    "secureInput": false
+                },
+                "userProperties": [],
+                "typeProperties": {
+                    "storedProcedureName": "[dbo].[usp_Update_Import_Details_FileLoad_End]",
+                    "storedProcedureParameters": {
+                        "FileName": {
+                            "value": {
+                                "value": "@pipeline().parameters.FileName",
+                                "type": "Expression"
+                            },
+                            "type": "String"
+                        },
+                        "TableName": {
+                            "value": {
+                                "value": "@pipeline().parameters.TableName",
+                                "type": "Expression"
+                            },
+                            "type": "String"
+                        }
+                    }
+                },
+                "linkedServiceName": {
+                    "referenceName": "AzSqlDb_SystmOne",
+                    "type": "LinkedServiceReference"
+                }
+            },
+            {
+                "name": "Log the Load CSV Data Failure",
+                "type": "SqlServerStoredProcedure",
+                "dependsOn": [
+                    {
+                        "activity": "Load CSV Files",
+                        "dependencyConditions": [
+                            "Failed"
+                        ]
+                    }
+                ],
+                "policy": {
+                    "timeout": "7.00:00:00",
+                    "retry": 0,
+                    "retryIntervalInSeconds": 30,
+                    "secureOutput": false,
+                    "secureInput": false
+                },
+                "userProperties": [],
+                "typeProperties": {
+                    "storedProcedureName": "[dbo].[usp_Update_Import_Details_FileLoad_Failure]",
+                    "storedProcedureParameters": {
+                        "FileName": {
+                            "value": {
+                                "value": "@pipeline().parameters.FileName",
+                                "type": "Expression"
+                            },
+                            "type": "String"
+                        },
+                        "TableName": {
+                            "value": {
+                                "value": "@pipeline().parameters.TableName",
+                                "type": "Expression"
+                            },
+                            "type": "String"
+                        }
+                    }
+                },
+                "linkedServiceName": {
+                    "referenceName": "AzSqlDb_SystmOne",
+                    "type": "LinkedServiceReference"
+                }
+            }
+        ],
+        "parameters": {
+            "FileName": {
+                "type": "string"
+            },
+            "TableName": {
+                "type": "string"
+            },
+            "FileProcessName": {
+                "type": "string"
+            }
+        },
+        "folder": {
+            "name": "SystmOne Data Load"
+        },
+        "annotations": [],
+        "lastPublishTime": "2021-11-08T09:38:54Z"
+    },
+    "type": "Microsoft.DataFactory/factories/pipelines"
+}

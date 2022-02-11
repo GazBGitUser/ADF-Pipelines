@@ -1,0 +1,281 @@
+{
+    "name": "Archive Files",
+    "properties": {
+        "activities": [
+            {
+                "name": "Copy Processed CSV Files to Archive",
+                "type": "Copy",
+                "dependsOn": [
+                    {
+                        "activity": "Log the File Archive Start",
+                        "dependencyConditions": [
+                            "Succeeded"
+                        ]
+                    }
+                ],
+                "policy": {
+                    "timeout": "7.00:00:00",
+                    "retry": 0,
+                    "retryIntervalInSeconds": 30,
+                    "secureOutput": false,
+                    "secureInput": false
+                },
+                "userProperties": [],
+                "typeProperties": {
+                    "source": {
+                        "type": "DelimitedTextSource",
+                        "storeSettings": {
+                            "type": "AzureFileStorageReadSettings",
+                            "recursive": true,
+                            "wildcardFolderPath": "Process",
+                            "wildcardFileName": "*.csv",
+                            "enablePartitionDiscovery": false
+                        },
+                        "formatSettings": {
+                            "type": "DelimitedTextReadSettings"
+                        }
+                    },
+                    "sink": {
+                        "type": "DelimitedTextSink",
+                        "storeSettings": {
+                            "type": "AzureFileStorageWriteSettings"
+                        },
+                        "formatSettings": {
+                            "type": "DelimitedTextWriteSettings",
+                            "quoteAllText": true,
+                            "fileExtension": ".csv"
+                        }
+                    },
+                    "enableStaging": false,
+                    "translator": {
+                        "type": "TabularTranslator",
+                        "typeConversion": true,
+                        "typeConversionSettings": {
+                            "allowDataTruncation": true,
+                            "treatBooleanAsNumber": false
+                        }
+                    }
+                },
+                "inputs": [
+                    {
+                        "referenceName": "FileProcessCSVs",
+                        "type": "DatasetReference"
+                    }
+                ],
+                "outputs": [
+                    {
+                        "referenceName": "FileArchiveCSVs",
+                        "type": "DatasetReference"
+                    }
+                ]
+            },
+            {
+                "name": "Log the File Archive Start",
+                "type": "SqlServerStoredProcedure",
+                "dependsOn": [],
+                "policy": {
+                    "timeout": "7.00:00:00",
+                    "retry": 0,
+                    "retryIntervalInSeconds": 30,
+                    "secureOutput": false,
+                    "secureInput": false
+                },
+                "userProperties": [],
+                "typeProperties": {
+                    "storedProcedureName": "[dbo].[usp_Log_Pipeline_Events]",
+                    "storedProcedureParameters": {
+                        "EventType": {
+                            "value": "Copy SystmOne CSVs from Process to Archive",
+                            "type": "String"
+                        },
+                        "PipelineName": {
+                            "value": {
+                                "value": "@pipeline().Pipeline",
+                                "type": "Expression"
+                            },
+                            "type": "String"
+                        },
+                        "PipelineRunID": {
+                            "value": {
+                                "value": "@pipeline().RunId",
+                                "type": "Expression"
+                            },
+                            "type": "String"
+                        },
+                        "PipelineTriggerID": {
+                            "value": {
+                                "value": "@pipeline().TriggerId",
+                                "type": "Expression"
+                            },
+                            "type": "String"
+                        },
+                        "PipelineTriggeredByPipeline": {
+                            "value": {
+                                "value": "@pipeline()?.TriggeredByPipelineName",
+                                "type": "Expression"
+                            },
+                            "type": "String"
+                        },
+                        "ProcessPhase": {
+                            "value": "Archive Files",
+                            "type": "String"
+                        },
+                        "EventText": {
+                            "value": null,
+                            "type": "String"
+                        },
+                        "DataFactoryName": {
+                            "value": {
+                                "value": "@pipeline().DataFactory",
+                                "type": "Expression"
+                            },
+                            "type": "String"
+                        }
+                    }
+                },
+                "linkedServiceName": {
+                    "referenceName": "AzSqlDb_SystmOne",
+                    "type": "LinkedServiceReference"
+                }
+            },
+            {
+                "name": "Log the File Archive End",
+                "type": "SqlServerStoredProcedure",
+                "dependsOn": [
+                    {
+                        "activity": "Copy Processed CSV Files to Archive",
+                        "dependencyConditions": [
+                            "Succeeded"
+                        ]
+                    }
+                ],
+                "policy": {
+                    "timeout": "7.00:00:00",
+                    "retry": 0,
+                    "retryIntervalInSeconds": 30,
+                    "secureOutput": false,
+                    "secureInput": false
+                },
+                "userProperties": [],
+                "typeProperties": {
+                    "storedProcedureName": "[dbo].[usp_Update_Pipeline_Events]",
+                    "storedProcedureParameters": {
+                        "EventText": {
+                            "value": "Move of Files from Process to Archive has completed successfully",
+                            "type": "String"
+                        }
+                    }
+                },
+                "linkedServiceName": {
+                    "referenceName": "AzSqlDb_SystmOne",
+                    "type": "LinkedServiceReference"
+                }
+            },
+            {
+                "name": "Log the File Archive Failure",
+                "type": "SqlServerStoredProcedure",
+                "dependsOn": [
+                    {
+                        "activity": "Copy Processed CSV Files to Archive",
+                        "dependencyConditions": [
+                            "Failed"
+                        ]
+                    }
+                ],
+                "policy": {
+                    "timeout": "7.00:00:00",
+                    "retry": 0,
+                    "retryIntervalInSeconds": 30,
+                    "secureOutput": false,
+                    "secureInput": false
+                },
+                "userProperties": [],
+                "typeProperties": {
+                    "storedProcedureName": "[dbo].[usp_Update_Pipeline_Events]",
+                    "storedProcedureParameters": {
+                        "EventText": {
+                            "value": "Archive of CSV Files has Failed",
+                            "type": "String"
+                        }
+                    }
+                },
+                "linkedServiceName": {
+                    "referenceName": "AzSqlDb_SystmOne",
+                    "type": "LinkedServiceReference"
+                }
+            },
+            {
+                "name": "Delete CSV Files from Process Folder",
+                "type": "Delete",
+                "dependsOn": [
+                    {
+                        "activity": "Copy Processed CSV Files to Archive",
+                        "dependencyConditions": [
+                            "Succeeded"
+                        ]
+                    }
+                ],
+                "policy": {
+                    "timeout": "7.00:00:00",
+                    "retry": 0,
+                    "retryIntervalInSeconds": 30,
+                    "secureOutput": false,
+                    "secureInput": false
+                },
+                "userProperties": [],
+                "typeProperties": {
+                    "dataset": {
+                        "referenceName": "FileProcessCSVs",
+                        "type": "DatasetReference"
+                    },
+                    "enableLogging": false,
+                    "storeSettings": {
+                        "type": "AzureFileStorageReadSettings",
+                        "recursive": true,
+                        "wildcardFileName": "*.csv",
+                        "enablePartitionDiscovery": false
+                    }
+                }
+            },
+            {
+                "name": "Log the File Archive Success",
+                "type": "SqlServerStoredProcedure",
+                "dependsOn": [
+                    {
+                        "activity": "Delete CSV Files from Process Folder",
+                        "dependencyConditions": [
+                            "Succeeded"
+                        ]
+                    }
+                ],
+                "policy": {
+                    "timeout": "7.00:00:00",
+                    "retry": 0,
+                    "retryIntervalInSeconds": 30,
+                    "secureOutput": false,
+                    "secureInput": false
+                },
+                "userProperties": [],
+                "typeProperties": {
+                    "storedProcedureName": "[dbo].[usp_Update_Pipeline_Events]",
+                    "storedProcedureParameters": {
+                        "EventText": {
+                            "value": "Archive Files has Completed Successfully",
+                            "type": "String"
+                        }
+                    }
+                },
+                "linkedServiceName": {
+                    "referenceName": "AzSqlDb_SystmOne",
+                    "type": "LinkedServiceReference"
+                }
+            }
+        ],
+        "folder": {
+            "name": "SystmOne Data Load"
+        },
+        "annotations": [],
+        "lastPublishTime": "2021-10-22T11:06:18Z"
+    },
+    "type": "Microsoft.DataFactory/factories/pipelines"
+}

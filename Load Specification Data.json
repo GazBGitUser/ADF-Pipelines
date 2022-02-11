@@ -1,0 +1,281 @@
+{
+    "name": "Load Specification Data",
+    "properties": {
+        "activities": [
+            {
+                "name": "Does the Specification File Exist",
+                "type": "IfCondition",
+                "dependsOn": [
+                    {
+                        "activity": "Find Specification file in Storage",
+                        "dependencyConditions": [
+                            "Succeeded"
+                        ]
+                    }
+                ],
+                "userProperties": [],
+                "typeProperties": {
+                    "expression": {
+                        "value": "@activity('Find Specification file in Storage').output.exists",
+                        "type": "Expression"
+                    },
+                    "ifTrueActivities": [
+                        {
+                            "name": "Load Specification CSV File",
+                            "type": "Copy",
+                            "dependsOn": [],
+                            "policy": {
+                                "timeout": "7.00:00:00",
+                                "retry": 0,
+                                "retryIntervalInSeconds": 30,
+                                "secureOutput": false,
+                                "secureInput": false
+                            },
+                            "userProperties": [],
+                            "typeProperties": {
+                                "source": {
+                                    "type": "DelimitedTextSource",
+                                    "storeSettings": {
+                                        "type": "AzureFileStorageReadSettings",
+                                        "recursive": false,
+                                        "enablePartitionDiscovery": false
+                                    },
+                                    "formatSettings": {
+                                        "type": "DelimitedTextReadSettings"
+                                    }
+                                },
+                                "sink": {
+                                    "type": "SqlMISink",
+                                    "preCopyScript": {
+                                        "value": "@{concat('TRUNCATE TABLE dbo.tbl_Specification')}",
+                                        "type": "Expression"
+                                    }
+                                },
+                                "enableStaging": false,
+                                "translator": {
+                                    "type": "TabularTranslator",
+                                    "typeConversion": true,
+                                    "typeConversionSettings": {
+                                        "allowDataTruncation": true,
+                                        "treatBooleanAsNumber": false
+                                    }
+                                }
+                            },
+                            "inputs": [
+                                {
+                                    "referenceName": "FileSpecificationCSV",
+                                    "type": "DatasetReference"
+                                }
+                            ],
+                            "outputs": [
+                                {
+                                    "referenceName": "AzSpecification",
+                                    "type": "DatasetReference"
+                                }
+                            ]
+                        },
+                        {
+                            "name": "Merge Specification Data to SQL",
+                            "type": "SqlServerStoredProcedure",
+                            "dependsOn": [
+                                {
+                                    "activity": "Load Specification CSV File",
+                                    "dependencyConditions": [
+                                        "Succeeded"
+                                    ]
+                                }
+                            ],
+                            "policy": {
+                                "timeout": "7.00:00:00",
+                                "retry": 0,
+                                "retryIntervalInSeconds": 30,
+                                "secureOutput": false,
+                                "secureInput": false
+                            },
+                            "userProperties": [],
+                            "typeProperties": {
+                                "storedProcedureName": "[dbo].[usp_Update_tbl_Specification]"
+                            },
+                            "linkedServiceName": {
+                                "referenceName": "AzSqlDb_SystmOne",
+                                "type": "LinkedServiceReference"
+                            }
+                        },
+                        {
+                            "name": "Create New Objects from SRSpecification",
+                            "type": "SqlServerStoredProcedure",
+                            "dependsOn": [
+                                {
+                                    "activity": "Merge Specification Data to SQL",
+                                    "dependencyConditions": [
+                                        "Succeeded"
+                                    ]
+                                }
+                            ],
+                            "policy": {
+                                "timeout": "7.00:00:00",
+                                "retry": 0,
+                                "retryIntervalInSeconds": 30,
+                                "secureOutput": false,
+                                "secureInput": false
+                            },
+                            "userProperties": [],
+                            "typeProperties": {
+                                "storedProcedureName": "[dbo].[usp_Create_All_Database_Objects]"
+                            },
+                            "linkedServiceName": {
+                                "referenceName": "AzSqlDb_SystmOne",
+                                "type": "LinkedServiceReference"
+                            }
+                        }
+                    ]
+                }
+            },
+            {
+                "name": "Find Specification file in Storage",
+                "type": "GetMetadata",
+                "dependsOn": [
+                    {
+                        "activity": "Log the Load Specification Start",
+                        "dependencyConditions": [
+                            "Succeeded"
+                        ]
+                    }
+                ],
+                "policy": {
+                    "timeout": "7.00:00:00",
+                    "retry": 0,
+                    "retryIntervalInSeconds": 30,
+                    "secureOutput": false,
+                    "secureInput": false
+                },
+                "userProperties": [],
+                "typeProperties": {
+                    "dataset": {
+                        "referenceName": "FileSpecificationCSV",
+                        "type": "DatasetReference"
+                    },
+                    "fieldList": [
+                        "exists"
+                    ],
+                    "storeSettings": {
+                        "type": "AzureFileStorageReadSettings",
+                        "recursive": true,
+                        "enablePartitionDiscovery": false
+                    },
+                    "formatSettings": {
+                        "type": "DelimitedTextReadSettings"
+                    }
+                }
+            },
+            {
+                "name": "Log the Load Specification Start",
+                "type": "SqlServerStoredProcedure",
+                "dependsOn": [],
+                "policy": {
+                    "timeout": "7.00:00:00",
+                    "retry": 0,
+                    "retryIntervalInSeconds": 30,
+                    "secureOutput": false,
+                    "secureInput": false
+                },
+                "userProperties": [],
+                "typeProperties": {
+                    "storedProcedureName": "[dbo].[usp_Log_Pipeline_Events]",
+                    "storedProcedureParameters": {
+                        "EventType": {
+                            "value": "Load Specification CSV File",
+                            "type": "String"
+                        },
+                        "PipelineName": {
+                            "value": {
+                                "value": "@pipeline().Pipeline",
+                                "type": "Expression"
+                            },
+                            "type": "String"
+                        },
+                        "PipelineRunID": {
+                            "value": {
+                                "value": "@pipeline().RunId",
+                                "type": "Expression"
+                            },
+                            "type": "String"
+                        },
+                        "PipelineTriggerID": {
+                            "value": {
+                                "value": "@pipeline().TriggerId",
+                                "type": "Expression"
+                            },
+                            "type": "String"
+                        },
+                        "PipelineTriggeredByPipeline": {
+                            "value": {
+                                "value": "@pipeline()?.TriggeredByPipelineName",
+                                "type": "Expression"
+                            },
+                            "type": "String"
+                        },
+                        "ProcessPhase": {
+                            "value": "Load Specification",
+                            "type": "String"
+                        },
+                        "EventText": {
+                            "value": null,
+                            "type": "String"
+                        },
+                        "DataFactoryName": {
+                            "value": {
+                                "value": "@pipeline().DataFactory",
+                                "type": "Expression"
+                            },
+                            "type": "String"
+                        }
+                    }
+                },
+                "linkedServiceName": {
+                    "referenceName": "AzSqlDb_SystmOne",
+                    "type": "LinkedServiceReference"
+                }
+            },
+            {
+                "name": "Log the Load Specification End",
+                "type": "SqlServerStoredProcedure",
+                "dependsOn": [
+                    {
+                        "activity": "Does the Specification File Exist",
+                        "dependencyConditions": [
+                            "Succeeded"
+                        ]
+                    }
+                ],
+                "policy": {
+                    "timeout": "7.00:00:00",
+                    "retry": 0,
+                    "retryIntervalInSeconds": 30,
+                    "secureOutput": false,
+                    "secureInput": false
+                },
+                "userProperties": [],
+                "typeProperties": {
+                    "storedProcedureName": "[dbo].[usp_Update_Pipeline_Events]",
+                    "storedProcedureParameters": {
+                        "EventText": {
+                            "value": "Load of Specification CSV has completed successfully",
+                            "type": "String"
+                        }
+                    }
+                },
+                "linkedServiceName": {
+                    "referenceName": "AzSqlDb_SystmOne",
+                    "type": "LinkedServiceReference"
+                }
+            }
+        ],
+        "folder": {
+            "name": "SystmOne Data Load"
+        },
+        "annotations": [],
+        "lastPublishTime": "2021-11-04T16:38:50Z"
+    },
+    "type": "Microsoft.DataFactory/factories/pipelines"
+}

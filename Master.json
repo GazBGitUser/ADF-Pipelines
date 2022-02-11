@@ -1,0 +1,456 @@
+{
+    "name": "Master",
+    "properties": {
+        "activities": [
+            {
+                "name": "Check Process Folder For Files",
+                "type": "GetMetadata",
+                "dependsOn": [
+                    {
+                        "activity": "Log the Master Load Start",
+                        "dependencyConditions": [
+                            "Succeeded"
+                        ]
+                    }
+                ],
+                "policy": {
+                    "timeout": "7.00:00:00",
+                    "retry": 0,
+                    "retryIntervalInSeconds": 30,
+                    "secureOutput": false,
+                    "secureInput": false
+                },
+                "userProperties": [],
+                "typeProperties": {
+                    "dataset": {
+                        "referenceName": "FileProcessCSVs",
+                        "type": "DatasetReference"
+                    },
+                    "fieldList": [
+                        "childItems"
+                    ],
+                    "storeSettings": {
+                        "type": "AzureFileStorageReadSettings",
+                        "recursive": true,
+                        "enablePartitionDiscovery": false
+                    },
+                    "formatSettings": {
+                        "type": "DelimitedTextReadSettings"
+                    }
+                }
+            },
+            {
+                "name": "Is the Process Folder Empty",
+                "type": "IfCondition",
+                "dependsOn": [
+                    {
+                        "activity": "Set CountOfFilesToProcess variable",
+                        "dependencyConditions": [
+                            "Succeeded"
+                        ]
+                    }
+                ],
+                "userProperties": [],
+                "typeProperties": {
+                    "expression": {
+                        "value": "@equals(variables('CountOfFilesToProcess'),'0')",
+                        "type": "Expression"
+                    },
+                    "ifFalseActivities": [
+                        {
+                            "name": "Load Remaining Data",
+                            "type": "ExecutePipeline",
+                            "dependsOn": [
+                                {
+                                    "activity": "Log the Load Remianing Data Start",
+                                    "dependencyConditions": [
+                                        "Succeeded"
+                                    ]
+                                }
+                            ],
+                            "userProperties": [],
+                            "typeProperties": {
+                                "pipeline": {
+                                    "referenceName": "Load Data",
+                                    "type": "PipelineReference"
+                                },
+                                "waitOnCompletion": true
+                            }
+                        },
+                        {
+                            "name": "Log the Load Remianing Data Start",
+                            "type": "SqlServerStoredProcedure",
+                            "dependsOn": [],
+                            "policy": {
+                                "timeout": "7.00:00:00",
+                                "retry": 0,
+                                "retryIntervalInSeconds": 30,
+                                "secureOutput": false,
+                                "secureInput": false
+                            },
+                            "userProperties": [],
+                            "typeProperties": {
+                                "storedProcedureName": "[dbo].[usp_Log_Pipeline_Events]",
+                                "storedProcedureParameters": {
+                                    "EventType": {
+                                        "value": "Load SystmOne CSVs from Process Folder",
+                                        "type": "String"
+                                    },
+                                    "PipelineName": {
+                                        "value": {
+                                            "value": "@pipeline().Pipeline",
+                                            "type": "Expression"
+                                        },
+                                        "type": "String"
+                                    },
+                                    "PipelineRunID": {
+                                        "value": {
+                                            "value": "@pipeline().RunId",
+                                            "type": "Expression"
+                                        },
+                                        "type": "String"
+                                    },
+                                    "PipelineTriggerID": {
+                                        "value": {
+                                            "value": "@pipeline().TriggerId",
+                                            "type": "Expression"
+                                        },
+                                        "type": "String"
+                                    },
+                                    "PipelineTriggeredByPipeline": {
+                                        "value": {
+                                            "value": "@pipeline()?.TriggeredByPipelineName",
+                                            "type": "Expression"
+                                        },
+                                        "type": "String"
+                                    },
+                                    "ProcessPhase": {
+                                        "value": "Load Any Remaining Files",
+                                        "type": "String"
+                                    },
+                                    "EventText": {
+                                        "value": null,
+                                        "type": "String"
+                                    },
+                                    "DataFactoryName": {
+                                        "value": {
+                                            "value": "@pipeline().DataFactory",
+                                            "type": "Expression"
+                                        },
+                                        "type": "String"
+                                    }
+                                }
+                            },
+                            "linkedServiceName": {
+                                "referenceName": "AzSqlDb_SystmOne",
+                                "type": "LinkedServiceReference"
+                            }
+                        },
+                        {
+                            "name": "Log the Load Remaining Data Success",
+                            "type": "SqlServerStoredProcedure",
+                            "dependsOn": [
+                                {
+                                    "activity": "Merge Remaining Data",
+                                    "dependencyConditions": [
+                                        "Succeeded"
+                                    ]
+                                }
+                            ],
+                            "policy": {
+                                "timeout": "7.00:00:00",
+                                "retry": 0,
+                                "retryIntervalInSeconds": 30,
+                                "secureOutput": false,
+                                "secureInput": false
+                            },
+                            "userProperties": [],
+                            "typeProperties": {
+                                "storedProcedureName": "[dbo].[usp_Update_Pipeline_Events]",
+                                "storedProcedureParameters": {
+                                    "EventText": {
+                                        "value": "Load of Remaining SystmOne CSVs has Completed Successfully",
+                                        "type": "String"
+                                    }
+                                }
+                            },
+                            "linkedServiceName": {
+                                "referenceName": "AzSqlDb_SystmOne",
+                                "type": "LinkedServiceReference"
+                            }
+                        },
+                        {
+                            "name": "Merge Remaining Data",
+                            "type": "ExecutePipeline",
+                            "dependsOn": [
+                                {
+                                    "activity": "Load Remaining Data",
+                                    "dependencyConditions": [
+                                        "Succeeded"
+                                    ]
+                                }
+                            ],
+                            "userProperties": [],
+                            "typeProperties": {
+                                "pipeline": {
+                                    "referenceName": "Merge Data",
+                                    "type": "PipelineReference"
+                                },
+                                "waitOnCompletion": true
+                            }
+                        }
+                    ],
+                    "ifTrueActivities": [
+                        {
+                            "name": "Load Manifest",
+                            "type": "ExecutePipeline",
+                            "dependsOn": [
+                                {
+                                    "activity": "Load Specification",
+                                    "dependencyConditions": [
+                                        "Succeeded"
+                                    ]
+                                }
+                            ],
+                            "userProperties": [],
+                            "typeProperties": {
+                                "pipeline": {
+                                    "referenceName": "Load Manifest Data",
+                                    "type": "PipelineReference"
+                                },
+                                "waitOnCompletion": true
+                            }
+                        },
+                        {
+                            "name": "Load Data",
+                            "type": "ExecutePipeline",
+                            "dependsOn": [
+                                {
+                                    "activity": "Load Manifest",
+                                    "dependencyConditions": [
+                                        "Succeeded"
+                                    ]
+                                }
+                            ],
+                            "userProperties": [],
+                            "typeProperties": {
+                                "pipeline": {
+                                    "referenceName": "Load Data",
+                                    "type": "PipelineReference"
+                                },
+                                "waitOnCompletion": true
+                            }
+                        },
+                        {
+                            "name": "Load Specification",
+                            "type": "ExecutePipeline",
+                            "dependsOn": [
+                                {
+                                    "activity": "Copy CSV Files from Download to Process",
+                                    "dependencyConditions": [
+                                        "Succeeded"
+                                    ]
+                                }
+                            ],
+                            "userProperties": [],
+                            "typeProperties": {
+                                "pipeline": {
+                                    "referenceName": "Load Specification Data",
+                                    "type": "PipelineReference"
+                                },
+                                "waitOnCompletion": true
+                            }
+                        },
+                        {
+                            "name": "Copy CSV Files from Download to Process",
+                            "type": "ExecutePipeline",
+                            "dependsOn": [],
+                            "userProperties": [],
+                            "typeProperties": {
+                                "pipeline": {
+                                    "referenceName": "Move Files to Process",
+                                    "type": "PipelineReference"
+                                },
+                                "waitOnCompletion": true
+                            }
+                        },
+                        {
+                            "name": "Merge Data",
+                            "type": "ExecutePipeline",
+                            "dependsOn": [
+                                {
+                                    "activity": "Load Data",
+                                    "dependencyConditions": [
+                                        "Succeeded"
+                                    ]
+                                }
+                            ],
+                            "userProperties": [],
+                            "typeProperties": {
+                                "pipeline": {
+                                    "referenceName": "Merge Data",
+                                    "type": "PipelineReference"
+                                },
+                                "waitOnCompletion": true
+                            }
+                        }
+                    ]
+                }
+            },
+            {
+                "name": "Archive Data",
+                "type": "ExecutePipeline",
+                "dependsOn": [
+                    {
+                        "activity": "Is the Process Folder Empty",
+                        "dependencyConditions": [
+                            "Succeeded"
+                        ]
+                    }
+                ],
+                "userProperties": [],
+                "typeProperties": {
+                    "pipeline": {
+                        "referenceName": "Archive Files",
+                        "type": "PipelineReference"
+                    },
+                    "waitOnCompletion": true
+                }
+            },
+            {
+                "name": "Log the Master Load Start",
+                "type": "SqlServerStoredProcedure",
+                "dependsOn": [],
+                "policy": {
+                    "timeout": "7.00:00:00",
+                    "retry": 0,
+                    "retryIntervalInSeconds": 30,
+                    "secureOutput": false,
+                    "secureInput": false
+                },
+                "userProperties": [],
+                "typeProperties": {
+                    "storedProcedureName": "[dbo].[usp_Log_Pipeline_Events]",
+                    "storedProcedureParameters": {
+                        "EventType": {
+                            "value": "Master Load Process",
+                            "type": "String"
+                        },
+                        "PipelineName": {
+                            "value": {
+                                "value": "@pipeline().Pipeline",
+                                "type": "Expression"
+                            },
+                            "type": "String"
+                        },
+                        "PipelineRunID": {
+                            "value": {
+                                "value": "@pipeline().RunId",
+                                "type": "Expression"
+                            },
+                            "type": "String"
+                        },
+                        "PipelineTriggerID": {
+                            "value": {
+                                "value": "@pipeline().TriggerId",
+                                "type": "Expression"
+                            },
+                            "type": "String"
+                        },
+                        "PipelineTriggeredByPipeline": {
+                            "value": {
+                                "value": "@pipeline()?.TriggeredByPipelineName",
+                                "type": "Expression"
+                            },
+                            "type": "String"
+                        },
+                        "ProcessPhase": {
+                            "value": "Master Load",
+                            "type": "String"
+                        },
+                        "EventText": {
+                            "value": null,
+                            "type": "String"
+                        },
+                        "DataFactoryName": {
+                            "value": {
+                                "value": "@pipeline().DataFactory",
+                                "type": "Expression"
+                            },
+                            "type": "String"
+                        }
+                    }
+                },
+                "linkedServiceName": {
+                    "referenceName": "AzSqlDb_SystmOne",
+                    "type": "LinkedServiceReference"
+                }
+            },
+            {
+                "name": "Log the Master Load Success",
+                "type": "SqlServerStoredProcedure",
+                "dependsOn": [
+                    {
+                        "activity": "Archive Data",
+                        "dependencyConditions": [
+                            "Succeeded"
+                        ]
+                    }
+                ],
+                "policy": {
+                    "timeout": "7.00:00:00",
+                    "retry": 0,
+                    "retryIntervalInSeconds": 30,
+                    "secureOutput": false,
+                    "secureInput": false
+                },
+                "userProperties": [],
+                "typeProperties": {
+                    "storedProcedureName": "[dbo].[usp_Update_Pipeline_Events_End]",
+                    "storedProcedureParameters": {
+                        "EventText": {
+                            "value": "Master Load has Completed Successfully",
+                            "type": "String"
+                        }
+                    }
+                },
+                "linkedServiceName": {
+                    "referenceName": "AzSqlDb_SystmOne",
+                    "type": "LinkedServiceReference"
+                }
+            },
+            {
+                "name": "Set CountOfFilesToProcess variable",
+                "type": "SetVariable",
+                "dependsOn": [
+                    {
+                        "activity": "Check Process Folder For Files",
+                        "dependencyConditions": [
+                            "Succeeded"
+                        ]
+                    }
+                ],
+                "userProperties": [],
+                "typeProperties": {
+                    "variableName": "CountOfFilesToProcess",
+                    "value": {
+                        "value": "@String(length(activity('Check Process Folder For Files').output.childitems))",
+                        "type": "Expression"
+                    }
+                }
+            }
+        ],
+        "variables": {
+            "CountOfFilesToProcess": {
+                "type": "String",
+                "defaultValue": "0"
+            }
+        },
+        "folder": {
+            "name": "SystmOne Data Load"
+        },
+        "annotations": [],
+        "lastPublishTime": "2021-11-11T16:29:29Z"
+    },
+    "type": "Microsoft.DataFactory/factories/pipelines"
+}

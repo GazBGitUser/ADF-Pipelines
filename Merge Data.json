@@ -1,0 +1,280 @@
+{
+    "name": "Merge Data",
+    "properties": {
+        "activities": [
+            {
+                "name": "For Each Manifest FileName",
+                "type": "ForEach",
+                "dependsOn": [
+                    {
+                        "activity": "Find Filename From Manifest",
+                        "dependencyConditions": [
+                            "Succeeded"
+                        ]
+                    }
+                ],
+                "userProperties": [],
+                "typeProperties": {
+                    "items": {
+                        "value": "@activity('Find Filename From Manifest').output.value",
+                        "type": "Expression"
+                    },
+                    "isSequential": true,
+                    "activities": [
+                        {
+                            "name": "Merge SystmOne Data",
+                            "type": "ExecutePipeline",
+                            "dependsOn": [],
+                            "userProperties": [],
+                            "typeProperties": {
+                                "pipeline": {
+                                    "referenceName": "Merge Each SystmOne Staging Tables to Live Tables",
+                                    "type": "PipelineReference"
+                                },
+                                "waitOnCompletion": true,
+                                "parameters": {
+                                    "FileName": {
+                                        "value": "@concat(Item().FileName,'.csv')",
+                                        "type": "Expression"
+                                    },
+                                    "TableName": {
+                                        "value": "@concat('wtbl',Item().FileName)",
+                                        "type": "Expression"
+                                    },
+                                    "ProcedureName": {
+                                        "value": "@concat('usp_Load_tbl',Item().FileName)",
+                                        "type": "Expression"
+                                    },
+                                    "ProcessFileName": {
+                                        "value": "@concat(Item().FileName)",
+                                        "type": "Expression"
+                                    }
+                                }
+                            }
+                        }
+                    ]
+                }
+            },
+            {
+                "name": "Find Filename From Manifest",
+                "type": "Lookup",
+                "dependsOn": [
+                    {
+                        "activity": "Log the Merge Data Start",
+                        "dependencyConditions": [
+                            "Succeeded"
+                        ]
+                    }
+                ],
+                "policy": {
+                    "timeout": "7.00:00:00",
+                    "retry": 0,
+                    "retryIntervalInSeconds": 30,
+                    "secureOutput": false,
+                    "secureInput": false
+                },
+                "userProperties": [],
+                "typeProperties": {
+                    "source": {
+                        "type": "SqlMISource",
+                        "sqlReaderQuery": "SELECT LTRIM(RTRIM(M.[FileName])) AS FileName \nFROM dbo.tblSRManifest M\nINNER JOIN dbo.tbl_ImportLog IL ON SUBSTRING(IL.TableName,5,260) = M.[FileName]\nWHERE SYSIsLoaded = 1 AND IL.RecordCount > 0",
+                        "isolationLevel": "ReadCommitted",
+                        "partitionOption": "None"
+                    },
+                    "dataset": {
+                        "referenceName": "AzureSqlMITables",
+                        "type": "DatasetReference"
+                    },
+                    "firstRowOnly": false
+                }
+            },
+            {
+                "name": "Log the Merge CSV Data Success",
+                "type": "SqlServerStoredProcedure",
+                "dependsOn": [
+                    {
+                        "activity": "For Each Manifest FileName",
+                        "dependencyConditions": [
+                            "Succeeded"
+                        ]
+                    }
+                ],
+                "policy": {
+                    "timeout": "7.00:00:00",
+                    "retry": 0,
+                    "retryIntervalInSeconds": 30,
+                    "secureOutput": false,
+                    "secureInput": false
+                },
+                "userProperties": [],
+                "typeProperties": {
+                    "storedProcedureName": "[dbo].[usp_Update_Pipeline_Events]",
+                    "storedProcedureParameters": {
+                        "EventText": {
+                            "value": "Merge of SystmOne CSVs has Completed Successfully",
+                            "type": "String"
+                        }
+                    }
+                },
+                "linkedServiceName": {
+                    "referenceName": "AzSqlDb_SystmOne",
+                    "type": "LinkedServiceReference"
+                }
+            },
+            {
+                "name": "Log the Merge CSV Data Failure",
+                "type": "SqlServerStoredProcedure",
+                "dependsOn": [
+                    {
+                        "activity": "For Each Manifest FileName",
+                        "dependencyConditions": [
+                            "Failed"
+                        ]
+                    }
+                ],
+                "policy": {
+                    "timeout": "7.00:00:00",
+                    "retry": 0,
+                    "retryIntervalInSeconds": 30,
+                    "secureOutput": false,
+                    "secureInput": false
+                },
+                "userProperties": [],
+                "typeProperties": {
+                    "storedProcedureName": "[dbo].[usp_Update_Pipeline_Events]",
+                    "storedProcedureParameters": {
+                        "EventText": {
+                            "value": "Merge of CSV File Data has Failed",
+                            "type": "String"
+                        }
+                    }
+                },
+                "linkedServiceName": {
+                    "referenceName": "AzSqlDb_SystmOne",
+                    "type": "LinkedServiceReference"
+                }
+            },
+            {
+                "name": "Log the Merge Data Start",
+                "type": "SqlServerStoredProcedure",
+                "dependsOn": [
+                    {
+                        "activity": "Wait 60 Seconds",
+                        "dependencyConditions": [
+                            "Succeeded"
+                        ]
+                    }
+                ],
+                "policy": {
+                    "timeout": "7.00:00:00",
+                    "retry": 0,
+                    "retryIntervalInSeconds": 30,
+                    "secureOutput": false,
+                    "secureInput": false
+                },
+                "userProperties": [],
+                "typeProperties": {
+                    "storedProcedureName": "[dbo].[usp_Log_Pipeline_Events]",
+                    "storedProcedureParameters": {
+                        "EventType": {
+                            "value": "Merge SystmOne CSVs Data",
+                            "type": "String"
+                        },
+                        "PipelineName": {
+                            "value": {
+                                "value": "@pipeline().Pipeline",
+                                "type": "Expression"
+                            },
+                            "type": "String"
+                        },
+                        "PipelineRunID": {
+                            "value": {
+                                "value": "@pipeline().RunId",
+                                "type": "Expression"
+                            },
+                            "type": "String"
+                        },
+                        "PipelineTriggerID": {
+                            "value": {
+                                "value": "@pipeline().TriggerId",
+                                "type": "Expression"
+                            },
+                            "type": "String"
+                        },
+                        "PipelineTriggeredByPipeline": {
+                            "value": {
+                                "value": "@pipeline()?.TriggeredByPipelineName",
+                                "type": "Expression"
+                            },
+                            "type": "String"
+                        },
+                        "ProcessPhase": {
+                            "value": "Merge Data",
+                            "type": "String"
+                        },
+                        "EventText": {
+                            "value": null,
+                            "type": "String"
+                        },
+                        "DataFactoryName": {
+                            "value": {
+                                "value": "@pipeline().DataFactory",
+                                "type": "Expression"
+                            },
+                            "type": "String"
+                        }
+                    }
+                },
+                "linkedServiceName": {
+                    "referenceName": "AzSqlDb_SystmOne",
+                    "type": "LinkedServiceReference"
+                }
+            },
+            {
+                "name": "Wait 60 Seconds",
+                "type": "Wait",
+                "dependsOn": [],
+                "userProperties": [],
+                "typeProperties": {
+                    "waitTimeInSeconds": 120
+                }
+            }
+        ],
+        "variables": {
+            "CSVFileName": {
+                "type": "String"
+            },
+            "SQLTableName": {
+                "type": "String"
+            },
+            "XMLFileAndPathName": {
+                "type": "String"
+            },
+            "TableName": {
+                "type": "Array"
+            },
+            "TablePrefix": {
+                "type": "String",
+                "defaultValue": "dbo.wtbl"
+            },
+            "XMLPathName": {
+                "type": "String",
+                "defaultValue": "FileDef/"
+            },
+            "XMLFileExtension": {
+                "type": "String",
+                "defaultValue": ".xml"
+            },
+            "CSVFileExtension": {
+                "type": "String",
+                "defaultValue": ".csv"
+            }
+        },
+        "folder": {
+            "name": "SystmOne Data Load"
+        },
+        "annotations": [],
+        "lastPublishTime": "2021-11-11T15:18:08Z"
+    },
+    "type": "Microsoft.DataFactory/factories/pipelines"
+}

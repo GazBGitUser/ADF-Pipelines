@@ -1,0 +1,182 @@
+{
+    "name": "Move Files to Process",
+    "properties": {
+        "activities": [
+            {
+                "name": "Log the File Move Start",
+                "type": "SqlServerStoredProcedure",
+                "dependsOn": [],
+                "policy": {
+                    "timeout": "7.00:00:00",
+                    "retry": 0,
+                    "retryIntervalInSeconds": 30,
+                    "secureOutput": false,
+                    "secureInput": false
+                },
+                "userProperties": [],
+                "typeProperties": {
+                    "storedProcedureName": "[dbo].[usp_Log_Pipeline_Events]",
+                    "storedProcedureParameters": {
+                        "EventType": {
+                            "value": "Copy SystmOne CSVs from Download to Process",
+                            "type": "String"
+                        },
+                        "PipelineName": {
+                            "value": {
+                                "value": "@pipeline().Pipeline",
+                                "type": "Expression"
+                            },
+                            "type": "String"
+                        },
+                        "PipelineRunID": {
+                            "value": {
+                                "value": "@pipeline().RunId",
+                                "type": "Expression"
+                            },
+                            "type": "String"
+                        },
+                        "PipelineTriggerID": {
+                            "value": {
+                                "value": "@pipeline().TriggerId",
+                                "type": "Expression"
+                            },
+                            "type": "String"
+                        },
+                        "PipelineTriggeredByPipeline": {
+                            "value": {
+                                "value": "@pipeline()?.TriggeredByPipelineName",
+                                "type": "Expression"
+                            },
+                            "type": "String"
+                        },
+                        "ProcessPhase": {
+                            "value": "File Move",
+                            "type": "String"
+                        },
+                        "EventText": {
+                            "value": "Copy SystmOne CSVs from Download to Process",
+                            "type": "String"
+                        },
+                        "DataFactoryName": {
+                            "value": {
+                                "value": "@pipeline().DataFactory",
+                                "type": "Expression"
+                            },
+                            "type": "String"
+                        }
+                    }
+                },
+                "linkedServiceName": {
+                    "referenceName": "AzSqlDb_SystmOne",
+                    "type": "LinkedServiceReference"
+                }
+            },
+            {
+                "name": "Move CSV Files from Download to Process",
+                "type": "Copy",
+                "dependsOn": [
+                    {
+                        "activity": "Log the File Move Start",
+                        "dependencyConditions": [
+                            "Succeeded"
+                        ]
+                    }
+                ],
+                "policy": {
+                    "timeout": "7.00:00:00",
+                    "retry": 0,
+                    "retryIntervalInSeconds": 30,
+                    "secureOutput": false,
+                    "secureInput": false
+                },
+                "userProperties": [],
+                "typeProperties": {
+                    "source": {
+                        "type": "DelimitedTextSource",
+                        "storeSettings": {
+                            "type": "AzureFileStorageReadSettings",
+                            "recursive": true,
+                            "wildcardFolderPath": "Download",
+                            "wildcardFileName": "*.csv",
+                            "enablePartitionDiscovery": false
+                        },
+                        "formatSettings": {
+                            "type": "DelimitedTextReadSettings"
+                        }
+                    },
+                    "sink": {
+                        "type": "DelimitedTextSink",
+                        "storeSettings": {
+                            "type": "AzureFileStorageWriteSettings"
+                        },
+                        "formatSettings": {
+                            "type": "DelimitedTextWriteSettings",
+                            "quoteAllText": true,
+                            "fileExtension": ".csv"
+                        }
+                    },
+                    "enableStaging": false,
+                    "translator": {
+                        "type": "TabularTranslator",
+                        "typeConversion": true,
+                        "typeConversionSettings": {
+                            "allowDataTruncation": true,
+                            "treatBooleanAsNumber": false
+                        }
+                    }
+                },
+                "inputs": [
+                    {
+                        "referenceName": "FileDownloadCSVs",
+                        "type": "DatasetReference"
+                    }
+                ],
+                "outputs": [
+                    {
+                        "referenceName": "FileProcessCSVs",
+                        "type": "DatasetReference"
+                    }
+                ]
+            },
+            {
+                "name": "Log the File Move End",
+                "type": "SqlServerStoredProcedure",
+                "dependsOn": [
+                    {
+                        "activity": "Move CSV Files from Download to Process",
+                        "dependencyConditions": [
+                            "Succeeded"
+                        ]
+                    }
+                ],
+                "policy": {
+                    "timeout": "7.00:00:00",
+                    "retry": 0,
+                    "retryIntervalInSeconds": 30,
+                    "secureOutput": false,
+                    "secureInput": false
+                },
+                "userProperties": [],
+                "typeProperties": {
+                    "storedProcedureName": "[dbo].[usp_Update_Pipeline_Events]",
+                    "storedProcedureParameters": {
+                        "EventText": {
+                            "value": "Copy of CSV Files from Download to Process Completed Successfully",
+                            "type": "String"
+                        }
+                    }
+                },
+                "linkedServiceName": {
+                    "referenceName": "AzSqlDb_SystmOne",
+                    "type": "LinkedServiceReference"
+                }
+            }
+        ],
+        "folder": {
+            "name": "SystmOne Data Load"
+        },
+        "annotations": [],
+        "lastPublishTime": "2021-10-22T11:01:46Z"
+    },
+    "type": "Microsoft.DataFactory/factories/pipelines"
+}

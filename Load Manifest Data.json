@@ -1,0 +1,343 @@
+{
+    "name": "Load Manifest Data",
+    "properties": {
+        "activities": [
+            {
+                "name": "Does the Manifest File Exist",
+                "type": "IfCondition",
+                "dependsOn": [
+                    {
+                        "activity": "Find Manifest file in Storage",
+                        "dependencyConditions": [
+                            "Succeeded"
+                        ]
+                    }
+                ],
+                "userProperties": [],
+                "typeProperties": {
+                    "expression": {
+                        "value": "@activity('Find Manifest file in Storage').output.exists",
+                        "type": "Expression"
+                    },
+                    "ifTrueActivities": [
+                        {
+                            "name": "Load Manifest CSV File",
+                            "type": "Copy",
+                            "dependsOn": [],
+                            "policy": {
+                                "timeout": "7.00:00:00",
+                                "retry": 0,
+                                "retryIntervalInSeconds": 30,
+                                "secureOutput": false,
+                                "secureInput": false
+                            },
+                            "userProperties": [],
+                            "typeProperties": {
+                                "source": {
+                                    "type": "DelimitedTextSource",
+                                    "storeSettings": {
+                                        "type": "AzureFileStorageReadSettings",
+                                        "recursive": false,
+                                        "enablePartitionDiscovery": false
+                                    },
+                                    "formatSettings": {
+                                        "type": "DelimitedTextReadSettings"
+                                    }
+                                },
+                                "sink": {
+                                    "type": "SqlMISink",
+                                    "preCopyScript": {
+                                        "value": "@{concat('TRUNCATE TABLE dbo.wtblSRManifest')}",
+                                        "type": "Expression"
+                                    }
+                                },
+                                "enableStaging": false,
+                                "translator": {
+                                    "type": "TabularTranslator",
+                                    "mappings": [
+                                        {
+                                            "source": {
+                                                "name": "FileName",
+                                                "type": "String",
+                                                "physicalType": "String"
+                                            },
+                                            "sink": {
+                                                "name": "FileName",
+                                                "type": "String",
+                                                "physicalType": "varchar"
+                                            }
+                                        },
+                                        {
+                                            "source": {
+                                                "name": "IsDelta",
+                                                "type": "String",
+                                                "physicalType": "String"
+                                            },
+                                            "sink": {
+                                                "name": "IsDelta",
+                                                "type": "String",
+                                                "physicalType": "char"
+                                            }
+                                        },
+                                        {
+                                            "source": {
+                                                "name": "IsReference",
+                                                "type": "String",
+                                                "physicalType": "String"
+                                            },
+                                            "sink": {
+                                                "name": "IsReference",
+                                                "type": "String",
+                                                "physicalType": "char"
+                                            }
+                                        },
+                                        {
+                                            "source": {
+                                                "name": "DateExtractFrom",
+                                                "type": "String",
+                                                "physicalType": "String"
+                                            },
+                                            "sink": {
+                                                "name": "DateExtractFrom",
+                                                "type": "String",
+                                                "physicalType": "varchar"
+                                            }
+                                        },
+                                        {
+                                            "source": {
+                                                "name": "DateExtractTo",
+                                                "type": "String",
+                                                "physicalType": "String"
+                                            },
+                                            "sink": {
+                                                "name": "DateExtractTo",
+                                                "type": "String",
+                                                "physicalType": "varchar"
+                                            }
+                                        }
+                                    ],
+                                    "typeConversion": true,
+                                    "typeConversionSettings": {
+                                        "allowDataTruncation": true,
+                                        "treatBooleanAsNumber": false
+                                    }
+                                }
+                            },
+                            "inputs": [
+                                {
+                                    "referenceName": "FileManifestCSV",
+                                    "type": "DatasetReference"
+                                }
+                            ],
+                            "outputs": [
+                                {
+                                    "referenceName": "AzWorkManifest",
+                                    "type": "DatasetReference"
+                                }
+                            ]
+                        },
+                        {
+                            "name": "Load Manifest Additions",
+                            "type": "SqlServerStoredProcedure",
+                            "dependsOn": [
+                                {
+                                    "activity": "Load Manifest CSV File",
+                                    "dependencyConditions": [
+                                        "Succeeded"
+                                    ]
+                                }
+                            ],
+                            "policy": {
+                                "timeout": "7.00:00:00",
+                                "retry": 0,
+                                "retryIntervalInSeconds": 30,
+                                "secureOutput": false,
+                                "secureInput": false
+                            },
+                            "userProperties": [],
+                            "typeProperties": {
+                                "storedProcedureName": "[dbo].[usp_SRManifest_Additions]"
+                            },
+                            "linkedServiceName": {
+                                "referenceName": "AzSqlDb_SystmOne",
+                                "type": "LinkedServiceReference"
+                            }
+                        },
+                        {
+                            "name": "Merge Manifest Data to SQL",
+                            "type": "SqlServerStoredProcedure",
+                            "dependsOn": [
+                                {
+                                    "activity": "Load Manifest Additions",
+                                    "dependencyConditions": [
+                                        "Succeeded"
+                                    ]
+                                }
+                            ],
+                            "policy": {
+                                "timeout": "7.00:00:00",
+                                "retry": 0,
+                                "retryIntervalInSeconds": 30,
+                                "secureOutput": false,
+                                "secureInput": false
+                            },
+                            "userProperties": [],
+                            "typeProperties": {
+                                "storedProcedureName": "[dbo].[usp_Load_tblSRManifest]"
+                            },
+                            "linkedServiceName": {
+                                "referenceName": "AzSqlDb_SystmOne",
+                                "type": "LinkedServiceReference"
+                            }
+                        }
+                    ]
+                }
+            },
+            {
+                "name": "Find Manifest file in Storage",
+                "type": "GetMetadata",
+                "dependsOn": [
+                    {
+                        "activity": "Log the Load Manifest Start",
+                        "dependencyConditions": [
+                            "Succeeded"
+                        ]
+                    }
+                ],
+                "policy": {
+                    "timeout": "7.00:00:00",
+                    "retry": 0,
+                    "retryIntervalInSeconds": 30,
+                    "secureOutput": false,
+                    "secureInput": false
+                },
+                "userProperties": [],
+                "typeProperties": {
+                    "dataset": {
+                        "referenceName": "FileManifestCSV",
+                        "type": "DatasetReference"
+                    },
+                    "fieldList": [
+                        "exists"
+                    ],
+                    "storeSettings": {
+                        "type": "AzureFileStorageReadSettings",
+                        "recursive": true,
+                        "enablePartitionDiscovery": false
+                    },
+                    "formatSettings": {
+                        "type": "DelimitedTextReadSettings"
+                    }
+                }
+            },
+            {
+                "name": "Log the Load Manifest Start",
+                "type": "SqlServerStoredProcedure",
+                "dependsOn": [],
+                "policy": {
+                    "timeout": "7.00:00:00",
+                    "retry": 0,
+                    "retryIntervalInSeconds": 30,
+                    "secureOutput": false,
+                    "secureInput": false
+                },
+                "userProperties": [],
+                "typeProperties": {
+                    "storedProcedureName": "[dbo].[usp_Log_Pipeline_Events]",
+                    "storedProcedureParameters": {
+                        "EventType": {
+                            "value": "Load Manifest CSV File",
+                            "type": "String"
+                        },
+                        "PipelineName": {
+                            "value": {
+                                "value": "@pipeline().Pipeline",
+                                "type": "Expression"
+                            },
+                            "type": "String"
+                        },
+                        "PipelineRunID": {
+                            "value": {
+                                "value": "@pipeline().RunId",
+                                "type": "Expression"
+                            },
+                            "type": "String"
+                        },
+                        "PipelineTriggerID": {
+                            "value": {
+                                "value": "@pipeline().TriggerId",
+                                "type": "Expression"
+                            },
+                            "type": "String"
+                        },
+                        "PipelineTriggeredByPipeline": {
+                            "value": {
+                                "value": "@pipeline()?.TriggeredByPipelineName",
+                                "type": "Expression"
+                            },
+                            "type": "String"
+                        },
+                        "ProcessPhase": {
+                            "value": "Load Manifest",
+                            "type": "String"
+                        },
+                        "EventText": {
+                            "value": null,
+                            "type": "String"
+                        },
+                        "DataFactoryName": {
+                            "value": {
+                                "value": "@pipeline().DataFactory",
+                                "type": "Expression"
+                            },
+                            "type": "String"
+                        }
+                    }
+                },
+                "linkedServiceName": {
+                    "referenceName": "AzSqlDb_SystmOne",
+                    "type": "LinkedServiceReference"
+                }
+            },
+            {
+                "name": "Log the Load Manifest End",
+                "type": "SqlServerStoredProcedure",
+                "dependsOn": [
+                    {
+                        "activity": "Does the Manifest File Exist",
+                        "dependencyConditions": [
+                            "Succeeded"
+                        ]
+                    }
+                ],
+                "policy": {
+                    "timeout": "7.00:00:00",
+                    "retry": 0,
+                    "retryIntervalInSeconds": 30,
+                    "secureOutput": false,
+                    "secureInput": false
+                },
+                "userProperties": [],
+                "typeProperties": {
+                    "storedProcedureName": "[dbo].[usp_Update_Pipeline_Events]",
+                    "storedProcedureParameters": {
+                        "EventText": {
+                            "value": "Load of Manifest CSV has completed successfully",
+                            "type": "String"
+                        }
+                    }
+                },
+                "linkedServiceName": {
+                    "referenceName": "AzSqlDb_SystmOne",
+                    "type": "LinkedServiceReference"
+                }
+            }
+        ],
+        "folder": {
+            "name": "SystmOne Data Load"
+        },
+        "annotations": [],
+        "lastPublishTime": "2021-11-04T16:35:32Z"
+    },
+    "type": "Microsoft.DataFactory/factories/pipelines"
+}
